@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, TextInput, Image, ToastAndroid, KeyboardAvoidingView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, TextInput, Image, ToastAndroid, KeyboardAvoidingView, Alert } from 'react-native';
 import * as Permissions from 'expo-permissions';
 import { BarCodeScanner } from 'expo-barcode-scanner';
 import * as firebase from 'firebase';
@@ -87,25 +87,104 @@ export default class BookTransactionScreen extends React.Component {
         });
     }
 
+    checkStudentEligibilityForBookIssue = async() => {
+        const studentRef = await db.collection("students").where("studentId","==", this.state.scannedStudentID).get();
+        var isStudentEligible = "";
+        if(studentRef.docs.length == 0) {
+            this.setState({
+                scannedBookID: "",
+                scannedStudentID: ""
+            });
+            isStudentEligible = false;
+            Alert.alert("The student does not exist in the database")
+        }
+        else {
+            studentRef.docs.map((doc) => {
+                var student = doc.data();
+                if(student.noOfBooksIssued < 2) {
+                    isStudentEligible = true;
+                }
+                else {
+                    isStudentEligible = false;
+                    Alert.alert("Student has already issued 2 books")
+                }
+                this.setState({
+                    scannedBookID: "",
+                    scannedStudentID: ""
+                });
+            });
+        }
+        return isStudentEligible;
+    }
+
+    checkStudentEligibilityForBookReturn = async() => {
+        const transactionRef = await db.collection("transaction").where("bookId","==", this.state.scannedBookID).limit(1).get();
+        var isStudentEligible = "";
+
+       
+            transactionRef.docs.map((doc) => {
+                var lastBookTransaction = doc.data();
+                if(lastBookTransaction.studentId === this.state.scannedStudentID) {
+                    isStudentEligible = true;
+                }
+                else {
+                    isStudentEligible = false;
+                    Alert.alert("The book was not issued by this student")
+                }
+                this.setState({
+                    scannedBookID: "",
+                    scannedStudentID: ""
+                });
+            });
+        
+        return isStudentEligible;
+    }
+
+    checkBookEligibility = async() => {
+        const bookRef = await db.collection("books").where("bookId","==",this.state.scannedBookID).get();
+
+        var transactionType = "";
+        if(bookRef.docs.length == 0) {
+            transactionType = false
+        }
+        else {
+            bookRef.docs.map((doc) => {
+                var book = doc.data();
+                if(book.bookAvailability) {
+                    transactionType = "issue";
+                }
+                else {
+                    transactionType = "return";
+                }
+            });
+        }
+        return transactionType;
+    }
+
     handleTransaction  = async() => {
-        var transactionMessage;
-        db.collection("books").doc(this.state.scannedBookID).get()
-        .then((doc) => {
-            var book = doc.data();
-            if(book.bookAvailability) {
+        var transactionType = await this.checkBookEligibility();
+
+        if(!transactionType) {
+            Alert.alert("The book does not exist in the database");
+            this.setState({
+                scannedBookID: "",
+                scannedStudentID: ""
+            });
+        }
+        else if(transactionType === "issue") {
+            var isStudentEligible = await this.checkStudentEligibilityForBookIssue();
+            if(isStudentEligible) {
                 this.initiateBookIssue();
-                transactionMessage = "Book Issued";
-                ToastAndroid.show(transactionMessage, ToastAndroid.SHORT);
+                Alert.alert("Book issued to the student")
             }
-            else {
+        }
+        else {
+            var isStudentEligible = await this.checkStudentEligibilityForBookReturn();
+            if(isStudentEligible) {
                 this.initiateBookReturn();
-                transactionMessage = "Book Returned";
-                ToastAndroid.show(transactionMessage, ToastAndroid.SHORT);
+                Alert.alert("Book returned to the library")
             }
-        });
-        this.setState({
-            transactionMessage: transactionMessage
-        })
+        }
     }
     
     render() {
@@ -198,3 +277,13 @@ const styles = StyleSheet.create({
         padding: 10
     }
 });
+
+/*
+var R = 0
+
+R == 0 //true
+R === 0 //true
+
+R == "0"    //true
+R === "0"   //false
+*/
