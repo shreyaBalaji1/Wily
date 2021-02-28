@@ -1,14 +1,15 @@
 import React from 'react';
-import { View, Text, FlatList } from 'react-native';
+import { View, Text, FlatList, TextInput } from 'react-native';
 import db from '../config';
-import {ScrollView} from "react-native-gesture-handler";
+import {ScrollView, TouchableOpacity} from "react-native-gesture-handler";
 
 export default class SearchScreen extends React.Component {
     constructor(props) {
         super(props);
         this.state = {
             allTransactions: [],
-            lastVisibleTransaction: null
+            lastVisibleTransaction: null,
+            search: ""
         }
     }
 
@@ -22,21 +23,72 @@ export default class SearchScreen extends React.Component {
     }
 
     fetchMoreTransactions = async() => {
-        const query = await db.collection("transaction").startAfter(this.state.lastVisibleTransaction).limit(10).get();
-        query.docs.map((doc) => {
+        var text = this.state.search.toUpperCase();
+        var enteredText = text.split("");
+        if(enteredText[0].toUpperCase() === "B") {
+            const query = await db.collection("transaction").where("bookId", "==", text).startAfter(this.state.lastVisibleTransaction).limit(10).get();
+            query.docs.map((doc) => {
+                this.setState({
+                    allTransactions: [...this.state.allTransactions, doc.data()],
+                    lastVisibleTransaction: doc
+                });
+            });
+        }
+        else if(enteredText[0].toUpperCase() === "S") {
+            const query = await db.collection("transaction").where("studentId", "==", text).startAfter(this.state.lastVisibleTransaction).limit(10).get();
+            query.docs.map((doc) => {
+                this.setState({
+                    allTransactions: [...this.state.allTransactions, doc.data()],
+                    lastVisibleTransaction: doc
+                });
+            });
+        }
+        
+    }
+
+    searchTransactions = async(text) => {
+        var enteredText = text.split("");   //Splits up the word into individual letters
+        if(enteredText[0].toUpperCase() === "B") {
+          const transaction = await db.collection("transaction").where("bookId", "==", text).get();
+          transaction.docs.map((doc)=>{
             this.setState({
                 allTransactions: [...this.state.allTransactions, doc.data()],
                 lastVisibleTransaction: doc
             });
-        });
+          });
+        }
+        else if(enteredText[0].toUpperCase() === "S") {
+            const transaction = await db.collection("transaction").where("studentId", "==", text).get();
+            transaction.docs.map((doc)=> {
+                this.setState({
+                    allTransactions: [...this.state.allTransactions, doc.data()],
+                    lastVisibleTransaction: doc
+                });
+            })
+        }
     }
 
     render() {
         return(
-        <View>
+        <View style={styles.container}>
             
-            <View>
-
+            <View style = {styles.searchBar}>
+                <TextInput
+                style = {styles.bar}
+                placeholder = "Enter Book ID or Student ID"
+                onChangeText = {(text) => {
+                    this.setState({
+                        search: text
+                    });
+                }}>
+                </TextInput>
+                <TouchableOpacity style = {styles.searchButton}
+                onPress = {() => {
+                    this.searchTransactions(this.state.search);
+                }}>
+                    <Text>Search</Text>
+                </TouchableOpacity>
+                
             </View>
             <FlatList>
                 data = {this.state.allTransactions}
@@ -58,3 +110,33 @@ export default class SearchScreen extends React.Component {
         );
     }
 }
+
+const styles = StyleSheet.create({
+     bar:{
+      borderWidth:2,
+      height:30,
+      width:300,
+      paddingLeft:10,
+    },
+    container: {
+      flex: 1,
+      marginTop: 20
+    },
+    searchBar:{
+      flexDirection:'row',
+      height:40,
+      width:'auto',
+      borderWidth:0.5,
+      alignItems:'center',
+      backgroundColor:'grey',
+  
+    },
+    searchButton:{
+        borderWidth:1,
+        height:30,
+        width:50,
+        alignItems:'center',
+        justifyContent:'center',
+        backgroundColor:'green'
+      }
+});
